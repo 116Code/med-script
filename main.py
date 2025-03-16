@@ -50,7 +50,8 @@ if st.button("🔍 Predict Disease Category"):
         st.error("⚠ Please enter text before predicting.")
 
 # Footer
+# Footer
 st.markdown("""
     <hr>
-    <p style='text-align: center;'>Developed with ❤️ using Streamlit & Hugging Face Transformers</p>
+    <p style='text-align: center;'>Developed @2025</p>
 """, unsafe_allow_html=True)

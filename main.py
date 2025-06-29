@@ -46,7 +46,7 @@ def predict_disease_category(text_en):
 # --- UI Streamlit ---
 st.set_page_config(page_title="Multilingual Disease Prediction", layout="centered")
 st.markdown("<h1 style='text-align:center;'>🩺 Disease Prediction from Medical Text</h1>", unsafe_allow_html=True)
-st.write("Enter medical text in **Indonesian**, **Spanish**, or **English**. The system will auto-translate and predict the disease category.")
+st.write("Enter medical text in **Indonesian**, **Spanish**, or **English**. The system predict the disease category.")
 
 text_input = st.text_area("📝 Medical Text:", placeholder="Example: el paciente siente que le falta el aire")
 

@@ -1,5 +1,5 @@
 streamlit
 torch
 transformers
-sentencepiece
+sentencepiece==0.1.99
 nltk

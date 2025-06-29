@@ -9,46 +9,50 @@ if isinstance(getattr(__import__('torch'), 'classes', None), types.ModuleType):
 
 from transformers import (
     AutoTokenizer, AutoModelForSequenceClassification,
-    MarianMTModel, MarianTokenizer, pipeline
+    AutoModelForSeq2SeqLM, pipeline
 )
 
-# Load model untuk prediksi penyakit
+# Load model prediksi penyakit (sudah dalam bahasa Inggris)
 tokenizer_en = AutoTokenizer.from_pretrained("DATEXIS/CORe-clinical-diagnosis-prediction")
 model_en = AutoModelForSequenceClassification.from_pretrained("DATEXIS/CORe-clinical-diagnosis-prediction")
 model_en.eval()
 
-# Load model translasi
-id_en_tokenizer = MarianTokenizer.from_pretrained("Helsinki-NLP/opus-mt-id-en")
-id_en_model = MarianMTModel.from_pretrained("Helsinki-NLP/opus-mt-id-en")
-en_id_tokenizer = MarianTokenizer.from_pretrained("Helsinki-NLP/opus-mt-en-id")
-en_id_model = MarianMTModel.from_pretrained("Helsinki-NLP/opus-mt-en-id")
+# Load model NLLB untuk translasi multibahasa (tanpa sentencepiece)
+nllb_tokenizer = AutoTokenizer.from_pretrained("facebook/nllb-200-distilled-600M")
+nllb_model = AutoModelForSeq2SeqLM.from_pretrained("facebook/nllb-200-distilled-600M")
 
-es_en_tokenizer = MarianTokenizer.from_pretrained("Helsinki-NLP/opus-mt-es-en")
-es_en_model = MarianMTModel.from_pretrained("Helsinki-NLP/opus-mt-es-en")
-en_es_tokenizer = MarianTokenizer.from_pretrained("Helsinki-NLP/opus-mt-en-es")
-en_es_model = MarianMTModel.from_pretrained("Helsinki-NLP/opus-mt-en-es")
+# Kode bahasa NLLB
+lang_code_map = {
+    "id": "ind_Latn",
+    "en": "eng_Latn",
+    "es": "spa_Latn"
+}
 
 # Deteksi bahasa otomatis
 lang_detector = pipeline("text-classification", model="papluca/xlm-roberta-base-language-detection")
 
-# Fungsi translate dua arah
-def translate(text, direction):
-    if direction == "id-en":
-        tokenizer, model = id_en_tokenizer, id_en_model
-    elif direction == "en-id":
-        tokenizer, model = en_id_tokenizer, en_id_model
-    elif direction == "es-en":
-        tokenizer, model = es_en_tokenizer, es_en_model
-    elif direction == "en-es":
-        tokenizer, model = en_es_tokenizer, en_es_model
-    else:
-        return text
+# Fungsi translasi dua arah pakai NLLB
+def translate_nllb(text, src_lang, tgt_lang):
+    src_code = lang_code_map.get(src_lang)
+    tgt_code = lang_code_map.get(tgt_lang)
 
-    tokens = tokenizer(text, return_tensors="pt", truncation=True, padding=True)
-    translated = model.generate(**tokens)
-    return tokenizer.decode(translated[0], skip_special_tokens=True)
+    if not src_code or not tgt_code:
+        return text  # fallback jika kode tidak ditemukan
 
-# Fungsi prediksi kategori penyakit
+    tokenizer = nllb_tokenizer
+    model = nllb_model
+
+    inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True, max_length=512)
+    inputs["input_ids"][0][0] = tokenizer.lang_code_to_id[src_code]
+
+    translated_tokens = model.generate(
+        **inputs,
+        forced_bos_token_id=tokenizer.lang_code_to_id[tgt_code],
+        max_length=512
+    )
+    return tokenizer.batch_decode(translated_tokens, skip_special_tokens=True)[0]
+
+# Fungsi prediksi penyakit
 def predict_disease_category(text_en):
     inputs = tokenizer_en(text_en, return_tensors="pt", truncation=True, padding=True, max_length=512)
     with torch.no_grad():
@@ -72,27 +76,22 @@ if st.button("🔍 Prediksi"):
     else:
         with st.spinner("Memproses..."):
             # Deteksi bahasa
-            lang = lang_detector(text_input)[0]['label']
-            lang = lang.lower()
+            lang = lang_detector(text_input)[0]['label'].lower()
 
             # Translate ke Inggris jika perlu
-            if lang == "id":
-                text_en = translate(text_input, "id-en")
-            elif lang == "es":
-                text_en = translate(text_input, "es-en")
+            if lang in ["id", "es"]:
+                text_en = translate_nllb(text_input, lang, "en")
             else:
                 text_en = text_input  # Sudah bahasa Inggris
 
-            # Prediksi penyakit
+            # Prediksi kategori penyakit
             categories = predict_disease_category(text_en)
 
-            # Translate balik hasil ke bahasa asli
+            # Translate balik hasil jika perlu
             if categories:
                 result_text = ", ".join(categories)
-                if lang == "id":
-                    result_text = translate(result_text, "en-id")
-                elif lang == "es":
-                    result_text = translate(result_text, "en-es")
+                if lang in ["id", "es"]:
+                    result_text = translate_nllb(result_text, "en", lang)
 
                 st.success("✔ Kategori Penyakit Terdeteksi:")
                 st.markdown(f"**🗂️ {result_text}**")

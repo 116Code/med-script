@@ -1,75 +1,43 @@
+from deep_translator import GoogleTranslator
 import streamlit as st
 import torch
-from transformers import (
-    AutoTokenizer, AutoModelForSequenceClassification,
-    M2M100Tokenizer, M2M100ForConditionalGeneration
-)
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
-# Load translation model
-trans_model_name = "facebook/m2m100_418M"
-trans_tokenizer = M2M100Tokenizer.from_pretrained(trans_model_name)
-trans_model = M2M100ForConditionalGeneration.from_pretrained(trans_model_name)
+# Load model hanya sekali
+diag_tokenizer = AutoTokenizer.from_pretrained("kamalkraj/bioelectra-base-discriminator-bioNER")
+diag_model = AutoModelForSequenceClassification.from_pretrained("kamalkraj/bioelectra-base-discriminator-bioNER")
 
-# Load disease prediction model (English)
-diag_tokenizer = AutoTokenizer.from_pretrained("DATEXIS/CORe-clinical-diagnosis-prediction")
-diag_model = AutoModelForSequenceClassification.from_pretrained("DATEXIS/CORe-clinical-diagnosis-prediction")
-diag_model.eval()
+def detect_and_translate_to_english(text):
+    return GoogleTranslator(source='auto', target='en').translate(text)
 
-# Language detection helper
-from langdetect import detect
+def translate_to_original(text, target_lang):
+    return GoogleTranslator(source='en', target=target_lang).translate(text)
 
-def translate(text, src_lang, tgt_lang):
-    trans_tokenizer.src_lang = src_lang
-    encoded = trans_tokenizer(text, return_tensors="pt")
-    generated = trans_model.generate(
-        **encoded,
-        forced_bos_token_id=trans_tokenizer.lang_code_to_id[tgt_lang]
-    )
-    return trans_tokenizer.batch_decode(generated, skip_special_tokens=True)[0]
-
-def predict_disease_category(text):
-    # Translate ke Inggris jika perlu
-    lang_code_map = {"id": "ind_Latn", "es": "spa_Latn", "en": "eng_Latn"}
-    detected_lang = detect(text)
-
-    if detected_lang != "en":
-        src_lang = lang_code_map.get(detected_lang, "eng_Latn")
-        text_en = translate(text, src_lang, "eng_Latn")
-    else:
-        text_en = text
-
-    # Diagnosis
+def predict_disease_category(text_en):
     inputs = diag_tokenizer(text_en, return_tensors="pt", truncation=True, padding=True, max_length=512)
     with torch.no_grad():
         outputs = diag_model(**inputs)
     predictions = torch.sigmoid(outputs.logits)
     predicted_labels = [diag_model.config.id2label[_id] for _id in (predictions > 0.3).nonzero()[:, 1].tolist()]
-
-    # Translate hasil kembali ke bahasa awal
-    if detected_lang != "en" and predicted_labels:
-        predicted_labels_translated = [translate(label, "eng_Latn", lang_code_map[detected_lang]) for label in predicted_labels]
-    else:
-        predicted_labels_translated = predicted_labels
-
-    return predicted_labels_translated
+    return predicted_labels
 
 # Streamlit UI
-st.set_page_config(page_title="Disease Prediction", page_icon="🩺", layout="centered")
-st.markdown("""<h1 style='text-align: center;'>🩺 Early Disease Detection</h1>""", unsafe_allow_html=True)
-st.write("Enter a medical transcript in Indonesian, Spanish, or English. The system will detect the language, analyze, and return predicted disease categories.")
+st.title("Medical Transcript Classification (Multilingual)")
 
-text_input = st.text_area("**Medical Record Transcript**", "", placeholder="Tulis teks medis dalam bahasa Indonesia, Spanyol, atau Inggris...")
+text_input = st.text_area("Masukkan teks medis (Bahasa Indonesia / Spanyol / Inggris):")
 
-if st.button("🔍 Predict Disease Category"):
-    if text_input.strip():
-        with st.spinner("Analyzing... 🔬"):
-            categories = predict_disease_category(text_input)
-        st.subheader("Predicted Categories:")
-        if categories:
-            st.success("✔ " + ", ".join(categories))
-        else:
-            st.warning("⚠ No significant disease category detected.")
-    else:
-        st.error("⚠ Please enter some text.")
+if st.button("Prediksi"):
+    with st.spinner("Sedang mentranslasi dan memproses..."):
+        # Deteksi bahasa dan translate ke Inggris
+        translated_text = detect_and_translate_to_english(text_input)
 
-st.markdown("<hr><p style='text-align: center;'>Developed @2025</p>", unsafe_allow_html=True)
+        # Proses prediksi dengan teks berbahasa Inggris
+        results = predict_disease_category(translated_text)
+
+        # Translate hasil label kembali ke bahasa awal (opsional)
+        detected_lang = GoogleTranslator(source='auto', target='en').detect_language(text_input)
+        translated_labels = [translate_to_original(label, detected_lang) for label in results]
+
+    st.success("Kategori Prediksi:")
+    for label in translated_labels:
+        st.write(f"- {label}")

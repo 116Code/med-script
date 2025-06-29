@@ -24,28 +24,30 @@ tokenizer_en, model_en = load_diagnosis_model()
 # --- Fungsi Translate Offline dengan Argos Translate ---
 def translate_argos(text, from_code="es", to_code="en"):
     try:
-        # Deteksi model yang tersedia
         installed_languages = argostranslate.translate.get_installed_languages()
         from_lang = next((lang for lang in installed_languages if lang.code == from_code), None)
         to_lang = next((lang for lang in installed_languages if lang.code == to_code), None)
 
-        # Jika belum terinstall, download & install dulu
         if not from_lang or not to_lang:
             argostranslate.package.update_package_index()
             available_packages = argostranslate.package.get_available_packages()
-            package = next(filter(lambda x: x.from_code == from_code and x.to_code == to_code, available_packages))
+            package = next(
+                filter(lambda x: x.from_code == from_code and x.to_code == to_code, available_packages)
+            )
             argostranslate.package.install_from_path(package.download())
-            # reload setelah install
             installed_languages = argostranslate.translate.get_installed_languages()
             from_lang = next((lang for lang in installed_languages if lang.code == from_code), None)
             to_lang = next((lang for lang in installed_languages if lang.code == to_code), None)
 
-        # Terjemahkan
         translation = from_lang.get_translation(to_lang)
         return translation.translate(text)
 
     except Exception as e:
-        return f"[Terjadi kesalahan translasi: {e}]"
+        # Tampilkan traceback atau error sebenarnya
+        import traceback
+        st.error("Terjadi kesalahan translasi:")
+        st.text(traceback.format_exc())
+        return "[Terjadi Error Translasi]"
 
 # --- Fungsi Prediksi Penyakit ---
 def predict_disease_category(text_en):

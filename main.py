@@ -24,7 +24,7 @@ from langdetect import detect
 # Fungsi translate dengan LibreTranslate
 def translate_libretranslate(text, source_lang="id", target_lang="en"):
     try:
-        url = "https://libretranslate.com/translate"
+        url = "https://libretranslate.de/translate"
         payload = {
             "q": text,
             "source": source_lang,

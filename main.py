@@ -44,17 +44,17 @@ def predict_disease_category(text_en):
     return labels
 
 # --- UI Streamlit ---
-st.set_page_config(page_title="Prediksi Penyakit Multibahasa", layout="centered")
-st.markdown("<h1 style='text-align:center;'>🩺 Prediksi Penyakit dari Teks Medis</h1>", unsafe_allow_html=True)
-st.write("Masukkan teks medis dalam Bahasa **Indonesia**, **Spanyol**, atau **Inggris**. Sistem akan menerjemahkan otomatis dan memprediksi kategori penyakit.")
+st.set_page_config(page_title="Multilingual Disease Prediction", layout="centered")
+st.markdown("<h1 style='text-align:center;'>🩺 Disease Prediction from Medical Text</h1>", unsafe_allow_html=True)
+st.write("Enter medical text in **Indonesian**, **Spanish**, or **English**. The system will auto-translate and predict the disease category.")
 
-text_input = st.text_area("📝 Teks Medis:", placeholder="Contoh: el paciente siente que le falta el aire")
+text_input = st.text_area("📝 Medical Text:", placeholder="Example: el paciente siente que le falta el aire")
 
-if st.button("🔍 Prediksi"):
+if st.button("🔍 Predict"):
     if not text_input.strip():
-        st.error("⚠ Harap masukkan teks terlebih dahulu.")
+        st.error("⚠ Please enter the text first.")
     else:
-        with st.spinner("🚀 Memproses..."):
+        with st.spinner("🚀 Processing..."):
 
             lang = detect(text_input)  # ex: 'es', 'id', 'en'
 
@@ -77,7 +77,7 @@ if st.button("🔍 Prediksi"):
                 elif lang == "es":
                     result_text = translate_libre(result_text, source_lang="en", target_lang="es")
 
-                st.success("✔ Kategori Penyakit Terdeteksi:")
+                st.success("✔ Category of Disease Detected:")
                 st.markdown(f"**🗂️ {result_text}**")
             else:
-                st.warning("⚠ Tidak ditemukan kategori penyakit yang signifikan.")
+                st.warning("⚠ No significant disease categories were found.")

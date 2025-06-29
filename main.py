@@ -24,18 +24,22 @@ from langdetect import detect
 # Fungsi translate dengan LibreTranslate
 def translate_libretranslate(text, source_lang="id", target_lang="en"):
     try:
-        url = "https://libretranslate.de/translate"
+        url = "https://translate.argosopentech.com/translate"
         payload = {
             "q": text,
             "source": source_lang,
             "target": target_lang,
             "format": "text"
         }
-        response = requests.post(url, data=payload)
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded"
+        }
+        response = requests.post(url, data=payload, headers=headers)
         response.raise_for_status()
         return response.json()["translatedText"]
     except Exception as e:
         return f"[Error Translating: {str(e)}]"
+
 
 # Fungsi prediksi kategori penyakit
 def predict_disease_category(text_en):

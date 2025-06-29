@@ -1,100 +1,75 @@
 import streamlit as st
 import torch
-import sys
-import types
-
-# Workaround untuk bug torch.classes path
-if isinstance(getattr(__import__('torch'), 'classes', None), types.ModuleType):
-    setattr(sys.modules['torch.classes'], '__path__', [])
-
 from transformers import (
     AutoTokenizer, AutoModelForSequenceClassification,
-    MarianMTModel, MarianTokenizer, pipeline
+    M2M100Tokenizer, M2M100ForConditionalGeneration
 )
 
-# Load model untuk prediksi penyakit
-tokenizer_en = AutoTokenizer.from_pretrained("DATEXIS/CORe-clinical-diagnosis-prediction")
-model_en = AutoModelForSequenceClassification.from_pretrained("DATEXIS/CORe-clinical-diagnosis-prediction")
-model_en.eval()
+# Load translation model
+trans_model_name = "facebook/m2m100_418M"
+trans_tokenizer = M2M100Tokenizer.from_pretrained(trans_model_name)
+trans_model = M2M100ForConditionalGeneration.from_pretrained(trans_model_name)
 
-# Load model translasi
-id_en_tokenizer = MarianTokenizer.from_pretrained("Helsinki-NLP/opus-mt-id-en")
-id_en_model = MarianMTModel.from_pretrained("Helsinki-NLP/opus-mt-id-en")
-en_id_tokenizer = MarianTokenizer.from_pretrained("Helsinki-NLP/opus-mt-en-id")
-en_id_model = MarianMTModel.from_pretrained("Helsinki-NLP/opus-mt-en-id")
+# Load disease prediction model (English)
+diag_tokenizer = AutoTokenizer.from_pretrained("DATEXIS/CORe-clinical-diagnosis-prediction")
+diag_model = AutoModelForSequenceClassification.from_pretrained("DATEXIS/CORe-clinical-diagnosis-prediction")
+diag_model.eval()
 
-es_en_tokenizer = MarianTokenizer.from_pretrained("Helsinki-NLP/opus-mt-es-en")
-es_en_model = MarianMTModel.from_pretrained("Helsinki-NLP/opus-mt-es-en")
-en_es_tokenizer = MarianTokenizer.from_pretrained("Helsinki-NLP/opus-mt-en-es")
-en_es_model = MarianMTModel.from_pretrained("Helsinki-NLP/opus-mt-en-es")
+# Language detection helper
+from langdetect import detect
 
-# Deteksi bahasa otomatis
-lang_detector = pipeline("text-classification", model="papluca/xlm-roberta-base-language-detection")
+def translate(text, src_lang, tgt_lang):
+    trans_tokenizer.src_lang = src_lang
+    encoded = trans_tokenizer(text, return_tensors="pt")
+    generated = trans_model.generate(
+        **encoded,
+        forced_bos_token_id=trans_tokenizer.lang_code_to_id[tgt_lang]
+    )
+    return trans_tokenizer.batch_decode(generated, skip_special_tokens=True)[0]
 
-# Fungsi translate dua arah
-def translate(text, direction):
-    if direction == "id-en":
-        tokenizer, model = id_en_tokenizer, id_en_model
-    elif direction == "en-id":
-        tokenizer, model = en_id_tokenizer, en_id_model
-    elif direction == "es-en":
-        tokenizer, model = es_en_tokenizer, es_en_model
-    elif direction == "en-es":
-        tokenizer, model = en_es_tokenizer, en_es_model
+def predict_disease_category(text):
+    # Translate ke Inggris jika perlu
+    lang_code_map = {"id": "ind_Latn", "es": "spa_Latn", "en": "eng_Latn"}
+    detected_lang = detect(text)
+
+    if detected_lang != "en":
+        src_lang = lang_code_map.get(detected_lang, "eng_Latn")
+        text_en = translate(text, src_lang, "eng_Latn")
     else:
-        return text
+        text_en = text
 
-    tokens = tokenizer(text, return_tensors="pt", truncation=True, padding=True)
-    translated = model.generate(**tokens)
-    return tokenizer.decode(translated[0], skip_special_tokens=True)
-
-# Fungsi prediksi kategori penyakit
-def predict_disease_category(text_en):
-    inputs = tokenizer_en(text_en, return_tensors="pt", truncation=True, padding=True, max_length=512)
+    # Diagnosis
+    inputs = diag_tokenizer(text_en, return_tensors="pt", truncation=True, padding=True, max_length=512)
     with torch.no_grad():
-        outputs = model_en(**inputs)
-    probs = torch.sigmoid(outputs.logits)
-    predicted = (probs > 0.3).nonzero()[:, 1].tolist()
-    labels = [model_en.config.id2label[i] for i in predicted]
-    return labels
+        outputs = diag_model(**inputs)
+    predictions = torch.sigmoid(outputs.logits)
+    predicted_labels = [diag_model.config.id2label[_id] for _id in (predictions > 0.3).nonzero()[:, 1].tolist()]
 
-# UI Streamlit
-st.set_page_config(page_title="Prediksi Penyakit Multibahasa", layout="centered")
-
-st.markdown("<h1 style='text-align:center;'>🩺 Prediksi Penyakit dari Teks Medis</h1>", unsafe_allow_html=True)
-st.write("Masukkan teks medis dalam Bahasa Indonesia, Spanyol, atau Inggris. Sistem akan memproses dan menampilkan hasilnya.")
-
-text_input = st.text_area("📝 Teks Medis:", placeholder="Contoh: Pasien mengalami sesak napas dan nyeri dada...")
-
-if st.button("🔍 Prediksi"):
-    if not text_input.strip():
-        st.error("⚠ Harap masukkan teks terlebih dahulu.")
+    # Translate hasil kembali ke bahasa awal
+    if detected_lang != "en" and predicted_labels:
+        predicted_labels_translated = [translate(label, "eng_Latn", lang_code_map[detected_lang]) for label in predicted_labels]
     else:
-        with st.spinner("Memproses..."):
-            # Deteksi bahasa
-            lang = lang_detector(text_input)[0]['label']
-            lang = lang.lower()
+        predicted_labels_translated = predicted_labels
 
-            # Translate ke Inggris jika perlu
-            if lang == "id":
-                text_en = translate(text_input, "id-en")
-            elif lang == "es":
-                text_en = translate(text_input, "es-en")
-            else:
-                text_en = text_input  # Sudah bahasa Inggris
+    return predicted_labels_translated
 
-            # Prediksi penyakit
-            categories = predict_disease_category(text_en)
+# Streamlit UI
+st.set_page_config(page_title="Disease Prediction", page_icon="🩺", layout="centered")
+st.markdown("""<h1 style='text-align: center;'>🩺 Early Disease Detection</h1>""", unsafe_allow_html=True)
+st.write("Enter a medical transcript in Indonesian, Spanish, or English. The system will detect the language, analyze, and return predicted disease categories.")
 
-            # Translate balik hasil ke bahasa asli
-            if categories:
-                result_text = ", ".join(categories)
-                if lang == "id":
-                    result_text = translate(result_text, "en-id")
-                elif lang == "es":
-                    result_text = translate(result_text, "en-es")
+text_input = st.text_area("**Medical Record Transcript**", "", placeholder="Tulis teks medis dalam bahasa Indonesia, Spanyol, atau Inggris...")
 
-                st.success("✔ Kategori Penyakit Terdeteksi:")
-                st.markdown(f"**🗂️ {result_text}**")
-            else:
-                st.warning("⚠ Tidak ditemukan kategori penyakit yang signifikan.")
+if st.button("🔍 Predict Disease Category"):
+    if text_input.strip():
+        with st.spinner("Analyzing... 🔬"):
+            categories = predict_disease_category(text_input)
+        st.subheader("Predicted Categories:")
+        if categories:
+            st.success("✔ " + ", ".join(categories))
+        else:
+            st.warning("⚠ No significant disease category detected.")
+    else:
+        st.error("⚠ Please enter some text.")
+
+st.markdown("<hr><p style='text-align: center;'>Developed @2025</p>", unsafe_allow_html=True)

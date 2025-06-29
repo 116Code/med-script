@@ -42,7 +42,7 @@ sympy==1.13.1
 tenacity==9.0.0
 tokenizers==0.21.1
 toml==0.10.2
-torch==2.2.2
+torch==2.5.1
 tornado==6.4.2
 tqdm==4.67.1
 transformers==4.49.0

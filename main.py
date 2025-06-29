@@ -1,5 +1,12 @@
 import streamlit as st
 import torch
+import sys
+import types
+
+# Workaround untuk bug torch.classes path
+if isinstance(getattr(__import__('torch'), 'classes', None), types.ModuleType):
+    setattr(sys.modules['torch.classes'], '__path__', [])
+
 from transformers import (
     AutoTokenizer, AutoModelForSequenceClassification,
     MarianMTModel, MarianTokenizer, pipeline

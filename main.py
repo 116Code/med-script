@@ -1,5 +1,6 @@
 import streamlit as st
 import torch
+import requests
 import sys
 import types
 
@@ -9,50 +10,34 @@ if isinstance(getattr(__import__('torch'), 'classes', None), types.ModuleType):
 
 from transformers import (
     AutoTokenizer, AutoModelForSequenceClassification,
-    AutoModelForSeq2SeqLM, pipeline
+    pipeline
 )
 
-# Load model prediksi penyakit (sudah dalam bahasa Inggris)
+# Load model untuk prediksi penyakit
 tokenizer_en = AutoTokenizer.from_pretrained("DATEXIS/CORe-clinical-diagnosis-prediction")
 model_en = AutoModelForSequenceClassification.from_pretrained("DATEXIS/CORe-clinical-diagnosis-prediction")
 model_en.eval()
 
-# Load model NLLB untuk translasi multibahasa (tanpa sentencepiece)
-nllb_tokenizer = AutoTokenizer.from_pretrained("facebook/nllb-200-distilled-600M")
-nllb_model = AutoModelForSeq2SeqLM.from_pretrained("facebook/nllb-200-distilled-600M")
-
-# Kode bahasa NLLB
-lang_code_map = {
-    "id": "ind_Latn",
-    "en": "eng_Latn",
-    "es": "spa_Latn"
-}
-
 # Deteksi bahasa otomatis
 lang_detector = pipeline("text-classification", model="papluca/xlm-roberta-base-language-detection")
 
-# Fungsi translasi dua arah pakai NLLB
-def translate_nllb(text, src_lang, tgt_lang):
-    src_code = lang_code_map.get(src_lang)
-    tgt_code = lang_code_map.get(tgt_lang)
+# Fungsi translate dengan LibreTranslate
+def translate_libretranslate(text, source_lang="id", target_lang="en"):
+    try:
+        url = "https://libretranslate.de/translate"
+        payload = {
+            "q": text,
+            "source": source_lang,
+            "target": target_lang,
+            "format": "text"
+        }
+        response = requests.post(url, data=payload)
+        response.raise_for_status()
+        return response.json()["translatedText"]
+    except Exception as e:
+        return f"[Error Translating: {str(e)}]"
 
-    if not src_code or not tgt_code:
-        return text  # fallback jika kode tidak ditemukan
-
-    tokenizer = nllb_tokenizer
-    model = nllb_model
-
-    inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True, max_length=512)
-    inputs["input_ids"][0][0] = tokenizer.lang_code_to_id[src_code]
-
-    translated_tokens = model.generate(
-        **inputs,
-        forced_bos_token_id=tokenizer.lang_code_to_id[tgt_code],
-        max_length=512
-    )
-    return tokenizer.batch_decode(translated_tokens, skip_special_tokens=True)[0]
-
-# Fungsi prediksi penyakit
+# Fungsi prediksi kategori penyakit
 def predict_disease_category(text_en):
     inputs = tokenizer_en(text_en, return_tensors="pt", truncation=True, padding=True, max_length=512)
     with torch.no_grad():
@@ -79,19 +64,23 @@ if st.button("🔍 Prediksi"):
             lang = lang_detector(text_input)[0]['label'].lower()
 
             # Translate ke Inggris jika perlu
-            if lang in ["id", "es"]:
-                text_en = translate_nllb(text_input, lang, "en")
+            if lang == "id":
+                text_en = translate_libretranslate(text_input, "id", "en")
+            elif lang == "es":
+                text_en = translate_libretranslate(text_input, "es", "en")
             else:
-                text_en = text_input  # Sudah bahasa Inggris
+                text_en = text_input
 
-            # Prediksi kategori penyakit
+            # Prediksi penyakit
             categories = predict_disease_category(text_en)
 
-            # Translate balik hasil jika perlu
+            # Translate balik hasil ke bahasa asli
             if categories:
                 result_text = ", ".join(categories)
-                if lang in ["id", "es"]:
-                    result_text = translate_nllb(result_text, "en", lang)
+                if lang == "id":
+                    result_text = translate_libretranslate(result_text, "en", "id")
+                elif lang == "es":
+                    result_text = translate_libretranslate(result_text, "en", "es")
 
                 st.success("✔ Kategori Penyakit Terdeteksi:")
                 st.markdown(f"**🗂️ {result_text}**")

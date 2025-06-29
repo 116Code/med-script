@@ -2,4 +2,4 @@ streamlit
 torch
 transformers
 langdetect
-argostranslate>=1.8.0
+requests

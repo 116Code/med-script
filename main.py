@@ -19,7 +19,7 @@ model_en = AutoModelForSequenceClassification.from_pretrained("DATEXIS/CORe-clin
 model_en.eval()
 
 # Deteksi bahasa otomatis
-lang_detector = pipeline("text-classification", model="papluca/xlm-roberta-base-language-detection")
+from langdetect import detect
 
 # Fungsi translate dengan LibreTranslate
 def translate_libretranslate(text, source_lang="id", target_lang="en"):
@@ -61,7 +61,9 @@ if st.button("🔍 Prediksi"):
     else:
         with st.spinner("Memproses..."):
             # Deteksi bahasa
-            lang = lang_detector(text_input)[0]['label'].lower()
+            # lang = lang_detector(text_input)[0]['label'].lower()
+            
+            lang = detect(text_input)  # output langsung kode: 'en', 'id', 'es', dll
 
             # Translate ke Inggris jika perlu
             if lang == "id":

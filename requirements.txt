@@ -34,7 +34,7 @@ regex==2024.11.6
 requests==2.32.3
 rpds-py==0.23.1
 safetensors==0.5.3
-sentencepiece==0.2.0
+sentencepiece==0.1.96
 six==1.17.0
 smmap==5.0.2
 streamlit==1.43.2

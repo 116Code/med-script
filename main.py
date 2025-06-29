@@ -24,7 +24,7 @@ from langdetect import detect
 # Fungsi translate dengan LibreTranslate
 def translate_libretranslate(text, source_lang="id", target_lang="en"):
     try:
-        url = "https://translate.argosopentech.com/translate"
+        url = "https://de.libretranslate.com/translate"
         payload = {
             "q": text,
             "source": source_lang,
@@ -39,6 +39,7 @@ def translate_libretranslate(text, source_lang="id", target_lang="en"):
         return response.json()["translatedText"]
     except Exception as e:
         return f"[Error Translating: {str(e)}]"
+
 
 
 # Fungsi prediksi kategori penyakit

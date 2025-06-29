@@ -27,7 +27,7 @@ st.title("Medical Transcript Classification (Multilingual)")
 text_input = st.text_area("Masukkan teks medis (Bahasa Indonesia / Spanyol / Inggris):")
 
 if st.button("Prediksi"):
-    with st.spinner("Sedang mentranslasi dan memproses..."):
+    with st.spinner("Sedang memproses..."):
         # Deteksi bahasa dan translate ke Inggris
         translated_text = detect_and_translate_to_english(text_input)
 

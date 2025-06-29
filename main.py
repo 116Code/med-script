@@ -1,48 +1,53 @@
 import streamlit as st
 import torch
-import requests
 import sys
 import types
+import argostranslate.package
+import argostranslate.translate
+from langdetect import detect
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
-# Workaround untuk bug torch.classes path
+# Workaround untuk bug torch.classes path (jika diperlukan)
 if isinstance(getattr(__import__('torch'), 'classes', None), types.ModuleType):
     setattr(sys.modules['torch.classes'], '__path__', [])
 
-from transformers import (
-    AutoTokenizer, AutoModelForSequenceClassification,
-    pipeline
-)
+# --- Load model diagnosis ---
+@st.cache_resource
+def load_diagnosis_model():
+    tokenizer = AutoTokenizer.from_pretrained("DATEXIS/CORe-clinical-diagnosis-prediction")
+    model = AutoModelForSequenceClassification.from_pretrained("DATEXIS/CORe-clinical-diagnosis-prediction")
+    model.eval()
+    return tokenizer, model
 
-# Load model untuk prediksi penyakit
-tokenizer_en = AutoTokenizer.from_pretrained("DATEXIS/CORe-clinical-diagnosis-prediction")
-model_en = AutoModelForSequenceClassification.from_pretrained("DATEXIS/CORe-clinical-diagnosis-prediction")
-model_en.eval()
+tokenizer_en, model_en = load_diagnosis_model()
 
-# Deteksi bahasa otomatis
-from langdetect import detect
-
-# Fungsi translate dengan LibreTranslate
-def translate_libretranslate(text, source_lang="id", target_lang="en"):
+# --- Fungsi Translate Offline dengan Argos Translate ---
+def translate_argos(text, from_code="es", to_code="en"):
     try:
-        url = "https://libretranslate.de/translate"
-        payload = {
-            "q": text,
-            "source": source_lang,
-            "target": target_lang,
-            "format": "text"
-        }
-        headers = {
-            "Content-Type": "application/x-www-form-urlencoded"
-        }
-        response = requests.post(url, data=payload, headers=headers)
-        response.raise_for_status()
-        return response.json()["translatedText"]
+        # Deteksi model yang tersedia
+        installed_languages = argostranslate.translate.get_installed_languages()
+        from_lang = next((lang for lang in installed_languages if lang.code == from_code), None)
+        to_lang = next((lang for lang in installed_languages if lang.code == to_code), None)
+
+        # Jika belum terinstall, download & install dulu
+        if not from_lang or not to_lang:
+            argostranslate.package.update_package_index()
+            available_packages = argostranslate.package.get_available_packages()
+            package = next(filter(lambda x: x.from_code == from_code and x.to_code == to_code, available_packages))
+            argostranslate.package.install_from_path(package.download())
+            # reload setelah install
+            installed_languages = argostranslate.translate.get_installed_languages()
+            from_lang = next((lang for lang in installed_languages if lang.code == from_code), None)
+            to_lang = next((lang for lang in installed_languages if lang.code == to_code), None)
+
+        # Terjemahkan
+        translation = from_lang.get_translation(to_lang)
+        return translation.translate(text)
+
     except Exception as e:
-        return f"[Error Translating: {str(e)}]"
+        return f"[Terjadi kesalahan translasi: {e}]"
 
-
-
-# Fungsi prediksi kategori penyakit
+# --- Fungsi Prediksi Penyakit ---
 def predict_disease_category(text_en):
     inputs = tokenizer_en(text_en, return_tensors="pt", truncation=True, padding=True, max_length=512)
     with torch.no_grad():
@@ -52,42 +57,39 @@ def predict_disease_category(text_en):
     labels = [model_en.config.id2label[i] for i in predicted]
     return labels
 
-# UI Streamlit
+# --- UI Streamlit ---
 st.set_page_config(page_title="Prediksi Penyakit Multibahasa", layout="centered")
+st.markdown("<h1 style='text-align:center;'>🩺 Prediksi Penyakit dari Teks Medis (Multibahasa & Offline)</h1>", unsafe_allow_html=True)
+st.write("Masukkan teks medis dalam Bahasa **Indonesia**, **Spanyol**, atau **Inggris**. Sistem akan menerjemahkan otomatis dan memprediksi kategori penyakit.")
 
-st.markdown("<h1 style='text-align:center;'>🩺 Prediksi Penyakit dari Teks Medis</h1>", unsafe_allow_html=True)
-st.write("Masukkan teks medis dalam Bahasa Indonesia, Spanyol, atau Inggris. Sistem akan memproses dan menampilkan hasilnya.")
-
-text_input = st.text_area("📝 Teks Medis:", placeholder="Contoh: Pasien mengalami sesak napas dan nyeri dada...")
+text_input = st.text_area("📝 Teks Medis:", placeholder="Contoh: el paciente siente que le falta el aire")
 
 if st.button("🔍 Prediksi"):
     if not text_input.strip():
         st.error("⚠ Harap masukkan teks terlebih dahulu.")
     else:
-        with st.spinner("Memproses..."):
-            # Deteksi bahasa
-            # lang = lang_detector(text_input)[0]['label'].lower()
-            
-            lang = detect(text_input)  # output langsung kode: 'en', 'id', 'es', dll
+        with st.spinner("🚀 Memproses..."):
 
-            # Translate ke Inggris jika perlu
+            lang = detect(text_input)  # 'id', 'en', 'es', etc.
+
+            # Translasi ke Inggris jika perlu
             if lang == "id":
-                text_en = translate_libretranslate(text_input, "id", "en")
+                text_en = translate_argos(text_input, from_code="id", to_code="en")
             elif lang == "es":
-                text_en = translate_libretranslate(text_input, "es", "en")
+                text_en = translate_argos(text_input, from_code="es", to_code="en")
             else:
                 text_en = text_input
 
             # Prediksi penyakit
             categories = predict_disease_category(text_en)
 
-            # Translate balik hasil ke bahasa asli
+            # Translate hasil balik
             if categories:
                 result_text = ", ".join(categories)
                 if lang == "id":
-                    result_text = translate_libretranslate(result_text, "en", "id")
+                    result_text = translate_argos(result_text, from_code="en", to_code="id")
                 elif lang == "es":
-                    result_text = translate_libretranslate(result_text, "en", "es")
+                    result_text = translate_argos(result_text, from_code="en", to_code="es")
 
                 st.success("✔ Kategori Penyakit Terdeteksi:")
                 st.markdown(f"**🗂️ {result_text}**")

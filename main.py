@@ -17,7 +17,7 @@ tokenizer_en, model_en = load_diagnosis_model()
 # --- Terjemahan via LibreTranslate.de ---
 def translate_libre(text, source_lang="es", target_lang="en"):
     try:
-        url = "https://libretranslate.de/translate"
+        url = "https://translate.argosopentech.com/translate"  # ganti ke endpoint stabil
         payload = {
             "q": text,
             "source": source_lang,
@@ -25,19 +25,21 @@ def translate_libre(text, source_lang="es", target_lang="en"):
             "format": "text"
         }
         headers = {
-            "Content-Type": "application/x-www-form-urlencoded"
+            "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": "Mozilla/5.0"  # tambahkan User-Agent untuk menghindari pemblokiran
         }
         response = requests.post(url, data=payload, headers=headers, timeout=10)
         response.raise_for_status()
 
-        # Cek isi response
-        if response.text.strip().startswith("{"):
+        # Validasi isi response
+        if response.headers.get("Content-Type", "").startswith("application/json"):
             return response.json()["translatedText"]
         else:
-            return f"[Translate Error: Unexpected response: {response.text[:100]}]"
+            return f"[Translate Error: Unexpected content: {response.text[:100]}]"
 
     except Exception as e:
         return f"[Error Translating: {e}]"
+
 
 # --- Prediksi penyakit ---
 def predict_disease_category(text_en):

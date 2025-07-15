@@ -3,7 +3,6 @@ import torch
 import requests
 from langdetect import detect
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
-import re
 
 # --- Load model diagnosis ---
 @st.cache_resource
@@ -12,10 +11,6 @@ def load_diagnosis_model():
     model = AutoModelForSequenceClassification.from_pretrained("DATEXIS/CORe-clinical-diagnosis-prediction")
     model.eval()
     return tokenizer, model
-
-# --- Fungsi hapus angka dari hasil prediksi ---
-def remove_numeric_labels(labels):
-    return [label for label in labels if not re.fullmatch(r"\d+", label)]
 
 tokenizer_en, model_en = load_diagnosis_model()
 
@@ -72,9 +67,6 @@ if st.button("🔍 Predict"):
 
             # Prediksi penyakit
             categories = predict_disease_category(text_en)
-
-            # Bersihkan angka dari label hasil prediksi
-            categories_clean = remove_numeric_labels(categories)
 
             # Translate hasil balik ke bahasa awal jika perlu
             if categories:

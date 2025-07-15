@@ -47,7 +47,7 @@ st.set_page_config(page_title="Multilingual Disease Prediction", layout="centere
 st.markdown("<h1 style='text-align:center;'>🩺 Disease Prediction from Medical Text</h1>", unsafe_allow_html=True)
 st.write("Enter medical text in **Indonesian**, **Spanish**, or **English**. The system predict the disease category.")
 
-text_input = st.text_area("📝 Medical Text:", placeholder="Example: el paciente siente que le falta el aire")
+text_input = st.text_area("📝 Medical Text:", placeholder="Example: the patient feels short of breath")
 
 if st.button("🔍 Predict"):
     if not text_input.strip():

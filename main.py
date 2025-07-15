@@ -29,7 +29,13 @@ def translate_libre(text, source_lang="es", target_lang="en"):
         }
         response = requests.post(url, data=payload, headers=headers, timeout=10)
         response.raise_for_status()
-        return response.json()["translatedText"]
+
+        # Cek isi response
+        if response.text.strip().startswith("{"):
+            return response.json()["translatedText"]
+        else:
+            return f"[Translate Error: Unexpected response: {response.text[:100]}]"
+
     except Exception as e:
         return f"[Error Translating: {e}]"
 

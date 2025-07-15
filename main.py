@@ -15,30 +15,21 @@ def load_diagnosis_model():
 tokenizer_en, model_en = load_diagnosis_model()
 
 # --- Terjemahan via LibreTranslate.de ---
-def translate_libre(text, source_lang="es", target_lang="en"):
+def translate_mymemory(text, source_lang="id", target_lang="en"):
     try:
-        url = "https://translate.argosopentech.com/translate"  # ganti ke endpoint stabil
-        payload = {
+        url = "https://api.mymemory.translated.net/get"
+        params = {
             "q": text,
-            "source": source_lang,
-            "target": target_lang,
-            "format": "text"
+            "langpair": f"{source_lang}|{target_lang}"
         }
-        headers = {
-            "Content-Type": "application/x-www-form-urlencoded",
-            "User-Agent": "Mozilla/5.0"  # tambahkan User-Agent untuk menghindari pemblokiran
-        }
-        response = requests.post(url, data=payload, headers=headers, timeout=10)
+        response = requests.get(url, params=params, timeout=10)
         response.raise_for_status()
+        data = response.json()
 
-        # Validasi isi response
-        if response.headers.get("Content-Type", "").startswith("application/json"):
-            return response.json()["translatedText"]
-        else:
-            return f"[Translate Error: Unexpected content: {response.text[:100]}]"
-
+        return data['responseData']['translatedText']
     except Exception as e:
         return f"[Error Translating: {e}]"
+
 
 
 # --- Prediksi penyakit ---
@@ -68,9 +59,9 @@ if st.button("🔍 Predict"):
 
             # Translasi ke Inggris jika bukan English
             if lang == "id":
-                text_en = translate_libre(text_input, source_lang="id", target_lang="en")
+                text_en = translate_mymemory(text_input, source_lang="id", target_lang="en")
             elif lang == "es":
-                text_en = translate_libre(text_input, source_lang="es", target_lang="en")
+                text_en = translate_mymemory(text_input, source_lang="es", target_lang="en")
             else:
                 text_en = text_input
 
@@ -81,9 +72,9 @@ if st.button("🔍 Predict"):
             if categories:
                 result_text = ", ".join(categories)
                 if lang == "id":
-                    result_text = translate_libre(result_text, source_lang="en", target_lang="id")
+                    result_text = translate_mymemory(result_text, source_lang="en", target_lang="id")
                 elif lang == "es":
-                    result_text = translate_libre(result_text, source_lang="en", target_lang="es")
+                    result_text = translate_mymemory(result_text, source_lang="en", target_lang="es")
 
                 st.success("✔ Category of Disease Detected:")
                 st.markdown(f"**🗂️ {result_text}**")

@@ -3,6 +3,7 @@ import torch
 import requests
 from langdetect import detect
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
+import re
 
 # --- Load model diagnosis ---
 @st.cache_resource

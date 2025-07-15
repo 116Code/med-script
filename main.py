@@ -12,6 +12,10 @@ def load_diagnosis_model():
     model.eval()
     return tokenizer, model
 
+# --- Fungsi hapus angka dari hasil prediksi ---
+def remove_numeric_labels(labels):
+    return [label for label in labels if not re.fullmatch(r"\d+", label)]
+
 tokenizer_en, model_en = load_diagnosis_model()
 
 # --- Terjemahan via LibreTranslate.de ---

@@ -68,6 +68,9 @@ if st.button("🔍 Predict"):
             # Prediksi penyakit
             categories = predict_disease_category(text_en)
 
+            # Bersihkan angka dari label hasil prediksi
+            categories_clean = remove_numeric_labels(categories)
+
             # Translate hasil balik ke bahasa awal jika perlu
             if categories:
                 result_text = ", ".join(categories)
